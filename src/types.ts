@@ -2,8 +2,8 @@ export type DistributionMode = 'instant' | 'spread-15m' | 'spread-1h' | 'spread-
 
 export interface LoadTestConfig {
   targetUrl: string;
-  subPaths: string[];         // e.g. ["/", "/about", "/pricing", "/blog"] for realistic multi-page sessions
-  enableMultiPage: boolean;   // simulate authentic multi-page browsing journeys
+  subPaths: string[];
+  enableMultiPage: boolean;
   totalRequests: number;
   concurrency: number;
   delayMs: number;
@@ -15,19 +15,15 @@ export interface LoadTestConfig {
   referer: string;
   acceptEncoding: boolean;
   keepAlive: boolean;
-  // Proxy pool rotation
-  proxyUrl?: string;          // single proxy or comma-separated list of proxies (http/https/socks5)
+  proxyUrl?: string;
   enableProxyRotation: boolean;
-  // WordPress & Jetpack / Analytics Tracking
-  enableWordPressTracking?: boolean; // Automatically fires Jetpack stats pixel (pixel.wp.com) & WP AJAX counters
-  jetpackBlogId?: string;           // Optional explicit Jetpack Blog ID (e.g. 175376211)
-  wpPostId?: string;                // Optional WordPress Post ID (e.g. 1234)
-  // Day distribution parameters
+  enableWordPressTracking?: boolean;
+  jetpackBlogId?: string;
+  wpPostId?: string;
   distributionMode: DistributionMode;
-  distributionMinutes: number; // total window in minutes
-  useDiurnalCurve: boolean;    // human 24h bell curve
+  distributionMinutes: number;
+  useDiurnalCurve: boolean;
 }
-
 
 export interface TrafficPreset {
   id: string;
@@ -39,7 +35,7 @@ export interface TrafficPreset {
   config: Partial<LoadTestConfig>;
   description: string;
   recommendedFor: string;
-  riskLevel: 'Very Low (Safe)' | 'Low (Normal)' | 'Medium (Spike)' | 'High (Stress)';
+  riskLevel: 'Low (Test)' | 'Medium (Load)' | 'High (Stress)';
 }
 
 export interface RequestMetric {
@@ -59,10 +55,10 @@ export interface RequestMetric {
 export interface AggregatedMetrics {
   totalSent: number;
   completed: number;
-  successful: number; // 200 OK
-  redirects: number;  // 3xx
-  clientErrors: number; // 4xx
-  serverErrors: number; // 5xx
+  successful: number;
+  redirects: number;
+  clientErrors: number;
+  serverErrors: number;
   networkErrors: number;
   elapsedSeconds: number;
   currentRps: number;
