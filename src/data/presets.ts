@@ -3,10 +3,10 @@ import { TrafficPreset } from '../types';
 export const TRAFFIC_PRESETS: TrafficPreset[] = [
   {
     id: 'wordpress-jetpack',
-    name: 'WordPress & Jetpack Analytics (Fixed)',
-    tagline: 'Fires real Jetpack pixel.wp.com tracking beacons & WP AJAX counters',
+    name: 'WordPress Analytics Check',
+    tagline: 'Test page delivery and analytics instrumentation on a WordPress site',
     category: 'organic',
-    icon: 'Sparkles',
+    icon: 'Activity',
     badgeColor: 'text-[#B4F82C] bg-[#152E20] border-[#27533B]',
     config: {
       totalRequests: 100,
@@ -15,23 +15,23 @@ export const TRAFFIC_PRESETS: TrafficPreset[] = [
       jitterMs: 900,
       timeoutSeconds: 10,
       userAgentMode: 'realistic-rotation',
-      referer: 'https://www.google.com/search?q=banking+fraud+guide',
+      referer: '',
       followRedirects: true,
       keepAlive: true,
-      enableWordPressTracking: true,
-      jetpackBlogId: '175376211',
+      enableWordPressTracking: false,
+      jetpackBlogId: '',
     },
     description:
-      'Specially designed for WordPress and Jetpack Stats. Fetches page HTML and automatically fires the client-side Jetpack stats pixel (pixel.wp.com/g.gif) and WordPress view counters so views register in wp-admin stats.',
-    recommendedFor: 'WordPress Jetpack Stats, WP-PostViews, Post Views Counter, and Google Analytics beacons.',
-    riskLevel: 'Very Low (Safe)'
+      'A conservative starting point for checking WordPress page delivery and analytics instrumentation. Enter your own target and analytics identifiers when required.',
+    recommendedFor: 'WordPress performance checks, analytics validation, and view-counter diagnostics.',
+    riskLevel: 'Low (Test)',
   },
   {
     id: 'organic-drip',
-    name: 'Normal Organic Traffic (Recommended)',
-    tagline: 'Natural human browsing session simulation with variable jitter',
+    name: 'Steady Browser Traffic',
+    tagline: 'Gentle request pacing with configurable jitter',
     category: 'organic',
-    icon: 'Sparkles',
+    icon: 'Activity',
     badgeColor: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
     config: {
       totalRequests: 100,
@@ -40,19 +40,19 @@ export const TRAFFIC_PRESETS: TrafficPreset[] = [
       jitterMs: 800,
       timeoutSeconds: 10,
       userAgentMode: 'realistic-rotation',
-      referer: 'https://www.google.com/',
+      referer: '',
       followRedirects: true,
       keepAlive: true,
     },
     description:
-      'Ideal for generating realistic, natural website visits without triggering rate limiters, CDN bot filters (Cloudflare/AWS WAF), or abnormal server spikes. Simulates 3 concurrent readers reading content with 1.5s - 2.3s pacing.',
-    recommendedFor: 'Normal view generation, personal portfolio/blog warmup, baseline analytics testing.',
-    riskLevel: 'Very Low (Safe)'
+      'A conservative profile for validating application behavior under a small, distributed request stream.',
+    recommendedFor: 'Baseline performance checks, caching validation, and application smoke tests.',
+    riskLevel: 'Low (Test)',
   },
   {
     id: 'steady-day-traffic',
-    name: 'Steady Moderate Stream',
-    tagline: 'Continuous gentle stream mimicking a live active community',
+    name: 'Moderate Stream',
+    tagline: 'Continuous request flow for sustained-load checks',
     category: 'moderate',
     icon: 'TrendingUp',
     badgeColor: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80',
@@ -63,19 +63,19 @@ export const TRAFFIC_PRESETS: TrafficPreset[] = [
       jitterMs: 400,
       timeoutSeconds: 10,
       userAgentMode: 'realistic-rotation',
-      referer: 'https://news.ycombinator.com/',
+      referer: '',
       followRedirects: true,
       keepAlive: true,
     },
     description:
-      'Provides a consistent flow of 500 distributed requests across 6 workers with modest human pacing. Simulates a viral post or newsletter traffic spike.',
-    recommendedFor: 'Simulating product launch traffic, caching layer validation, uptime monitor validation.',
-    riskLevel: 'Low (Normal)'
+      'Provides a consistent stream of requests across a small worker pool for sustained-load and caching validation.',
+    recommendedFor: 'Application performance checks, cache validation, and controlled launch testing.',
+    riskLevel: 'Medium (Load)',
   },
   {
     id: 'peak-hour-surge',
-    name: 'Peak Hour Surge',
-    tagline: 'Higher concurrency with tight pacing for load testing',
+    name: 'Peak Load',
+    tagline: 'Higher concurrency for controlled load testing',
     category: 'benchmark',
     icon: 'Zap',
     badgeColor: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
@@ -91,16 +91,16 @@ export const TRAFFIC_PRESETS: TrafficPreset[] = [
       keepAlive: true,
     },
     description:
-      'Pushes 15 parallel workers with 250ms pacing to simulate heavy concurrent usage, verifying if your web server auto-scales or handles concurrent socket pools.',
-    recommendedFor: 'Backend performance tuning, database connection pool stress test.',
-    riskLevel: 'Medium (Spike)'
+      'A controlled higher-concurrency profile for validating server scaling, connection pools, and latency under load.',
+    recommendedFor: 'Backend performance tuning and connection-pool testing on systems you control.',
+    riskLevel: 'Medium (Load)',
   },
   {
     id: 'stress-capacity-test',
-    name: 'High Concurrency Benchmark',
-    tagline: 'Maximum throughput without pacing to find breaking points',
+    name: 'Capacity Benchmark',
+    tagline: 'High-throughput benchmark for controlled environments',
     category: 'benchmark',
-    icon: 'Flame',
+    icon: 'Gauge',
     badgeColor: 'text-rose-400 bg-rose-950/60 border-rose-800/80',
     config: {
       totalRequests: 3000,
@@ -114,8 +114,8 @@ export const TRAFFIC_PRESETS: TrafficPreset[] = [
       keepAlive: true,
     },
     description:
-      'Full throttle benchmark with 0ms delay to calculate maximum requests per second (RPS) and latency percentiles (P50/P90/P99).',
-    recommendedFor: 'Server capacity planning, CDN benchmark, microservice load testing.',
-    riskLevel: 'High (Stress)'
-  }
+      'Full-throughput benchmarking profile intended for infrastructure and services you own or are explicitly authorized to test.',
+    recommendedFor: 'Capacity planning, CDN benchmarking, and controlled service load testing.',
+    riskLevel: 'High (Stress)',
+  },
 ];
