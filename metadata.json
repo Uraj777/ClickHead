@@ -1,0 +1,6 @@
+{
+  "name": "ClickHead",
+  "description": "Organic HTTP traffic pacing, real-time telemetry, and 24-hour diurnal scheduling with Go goroutines and realistic browser profile rotation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
