@@ -1,4 +1,5 @@
 import express from 'express';
+import { runBrowserTest } from './browserTest';
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -71,6 +72,32 @@ app.get('/test-page', (req, res) => {
   recordVisit(req);
   const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ClickHead · Standalone View Counter Test</title><style>body{margin:0;min-height:100vh;background:#07110C;color:#E8EDE0;font-family:system-ui,sans-serif;display:grid;place-items:center;padding:24px}.card{width:min(720px,100%);background:#0C1A12;border:1px solid #1E3E2B;border-radius:24px;padding:32px;box-sizing:border-box}p{color:#9BB0A3;line-height:1.6}.count{text-align:center;padding:28px;margin:24px 0;background:#050C08;border-radius:18px}.count strong{display:block;font:900 80px/1 ui-monospace,monospace;color:#B4F82C;margin-top:8px}.actions{display:flex;gap:10px;flex-wrap:wrap}button,a{border:1px solid #1E3E2B;background:#112419;color:#E8EDE0;border-radius:12px;padding:12px 16px;font-weight:700;text-decoration:none;cursor:pointer}button.primary{background:#B4F82C;color:#000}</style></head><body><main class="card"><h1>Standalone View Counter</h1><p>This page verifies that HTTP requests reach a controlled ClickHead test endpoint. It does not emulate or disguise human traffic.</p><section class="count"><span>Recorded test hits</span><strong id="count">0</strong></section><div class="actions"><button class="primary" onclick="hit()">Record one test hit</button><button onclick="refresh()">Refresh</button><button onclick="resetCount()">Reset</button><a href="/">Open ClickHead</a></div></main><script>async function refresh(){try{const r=await fetch(\'/api/test/stats\');const d=await r.json();document.getElementById(\'count\').textContent=d.totalViews}catch(e){console.error(e)}}async function hit(){await fetch(\'/api/test/visit\',{method:\'POST\'});refresh()}async function resetCount(){await fetch(\'/api/test/reset\',{method:\'POST\'});refresh()}refresh();setInterval(refresh,1500)</script></body></html>';
   res.type('html').send(html);
+});
+
+app.get('/api/browser/stream', async (req, res) => {
+  const targetRaw = String(req.query.targetUrl || '').trim();
+  if (!targetRaw) { res.status(400).json({ error: 'A target URL is required.' }); return; }
+  try { await validateTarget(targetRaw); } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid target.' }); return; }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  let closed = false;
+  req.on('close', () => { closed = true; });
+  const send = (event: string, data: unknown) => {
+    if (!closed && !res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const result = await runBrowserTest(targetRaw, (event) => send(event.type, event));
+    if (!closed) send('complete', result);
+  } catch (error) {
+    send('error', { message: error instanceof Error ? error.message : 'Browser test failed.' });
+  } finally {
+    if (!res.writableEnded) res.end();
+  }
 });
 
 app.post('/api/traffic/stop', (req, res) => {
