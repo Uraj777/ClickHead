@@ -1,5 +1,6 @@
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
+import { ClickHeadLogo } from './ClickHeadLogo';
 
 function DotLogo({ size = 22 }: { size?: number }) {
   return (
@@ -26,13 +27,11 @@ function DotLogo({ size = 22 }: { size?: number }) {
 
 export const DotFooter: React.FC = () => {
   return (
-    <footer className="border-t border-[#162D20] bg-[#07110C] py-5 mt-12">
+    <footer className="border-t border-[#162D20] bg-[#07110C] py-4 mt-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4 text-xs">
-          <div className="flex items-center justify-center md:justify-start gap-2.5 order-2 md:order-1">
-            <span className="font-semibold text-[#E8EDE0]">ClickHead</span>
-            <span className="text-[#3F684F]">•</span>
-            <span className="text-[11px] font-mono text-[#9BB0A3]">Traffic testing & load diagnostics</span>
+          <div className="flex items-center justify-center md:justify-start order-2 md:order-1">
+            <ClickHeadLogo size="sm" showWordmark={true} />
           </div>
 
           <a
