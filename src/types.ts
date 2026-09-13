@@ -48,6 +48,7 @@ export interface RequestMetric {
   success: boolean;
   error?: string;
   userAgent: string;
+  referer?: string;
   bytesReceived: number;
 }
 

@@ -25,10 +25,10 @@ export const Header: React.FC<HeaderProps> = ({
           <ClickHeadLogo size="md" />
           <div className="hidden sm:block border-l border-[#1A3324] pl-3.5">
             <span className="text-[11px] uppercase tracking-widest font-mono text-[#B4F82C] font-semibold block">
-              TRAFFIC ENGINE &bull; GO DAEMON
+              TYPESCRIPT WEB SUITE &bull; GO DAEMON
             </span>
             <span className="text-xs text-[#9BB0A3]">
-              Natural Human Pacing &bull; 24h Diurnal Schedule
+              Natural Human Traffic Pacing &bull; 24h Diurnal Engine
             </span>
           </div>
         </div>

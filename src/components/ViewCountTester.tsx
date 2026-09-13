@@ -125,6 +125,19 @@ export const ViewCountTester: React.FC<ViewCountTesterProps> = ({
       const next = currentLocal + count;
       localStorage.setItem(STORAGE_KEY, String(next));
       setViewCount(next);
+
+      const newVisits: ViewRecord[] = [];
+      for (let i = 0; i < Math.min(count, 20); i++) {
+        newVisits.push({
+          id: next - i,
+          timestamp: new Date(Date.now() - i * 300).toISOString(),
+          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36',
+          referer: 'https://www.google.com/search?q=organic+traffic+test',
+          ip: `198.51.100.${Math.floor(Math.random() * 250) + 1}`,
+          path: '/api/test/visit',
+        });
+      }
+      setVisits((prev) => [...newVisits, ...prev].slice(0, 50));
     } finally {
       setIsInjecting(false);
     }
