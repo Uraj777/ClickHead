@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
           <ClickHeadLogo size="md" />
           <div className="hidden sm:block border-l border-[#1A3324] pl-3.5">
             <span className="text-[11px] uppercase tracking-widest font-mono text-[#B4F82C] font-semibold block">
-              TRAFFIC TESTING SUITE • GO ENGINE
+              HTTP TRAFFIC TESTING SUITE
             </span>
             <span className="text-xs text-[#9BB0A3]">
               Request pacing • load profiles • live telemetry
