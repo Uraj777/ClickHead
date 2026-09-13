@@ -1,6 +1,4 @@
 import express from 'express';
-import dns from 'dns/promises';
-import net from 'net';
 
 export const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -18,9 +16,13 @@ const recordVisit = (req: express.Request): VisitRecord => {
 
 function isPrivateAddress(address: string): boolean {
   const normalized = address.replace(/^::ffff:/, '').toLowerCase();
-  if (net.isIPv4(normalized)) { const [a, b] = normalized.split('.').map(Number); return a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168); }
-  if (net.isIPv6(normalized)) return normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:');
-  return false;
+  const ipv4 = normalized.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b, c, d] = ipv4.slice(1).map(Number);
+    if ([a,b,c,d].some((part) => part > 255)) return true;
+    return a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  return normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:');
 }
 
 async function validateTarget(raw: string): Promise<URL> {
@@ -29,7 +31,8 @@ async function validateTarget(raw: string): Promise<URL> {
   if (url.username || url.password) throw new Error('Credential-bearing target URLs are not supported.');
   const hostname = url.hostname.toLowerCase();
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) throw new Error('Local targets are disabled in production.');
-  if (net.isIP(hostname)) { if (isPrivateAddress(hostname)) throw new Error('Private-network targets are disabled.'); return url; }
+  if (isPrivateAddress(hostname)) throw new Error('Private-network targets are disabled.');
+  const dns = await import('node:dns/promises');
   const addresses = await dns.lookup(hostname, { all: true });
   if (!addresses.length || addresses.some((entry) => isPrivateAddress(entry.address))) throw new Error('Target resolves to a private or local network.');
   return url;
@@ -43,5 +46,4 @@ app.post('/api/test/batch-visit', (req, res) => { const count = Math.min(500, Ma
 
 app.get('/test-page', (req, res) => { recordVisit(req); res.type('html').send('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ClickHead · Standalone View Counter Test</title></head><body style="font-family:system-ui;background:#07110C;color:#E8EDE0;min-height:100vh;display:grid;place-items:center"><main><h1>Standalone View Counter</h1><p>Controlled HTTP test endpoint.</p><button onclick="fetch(\'/api/test/visit\',{method:\'POST\'}).then(refresh)">Record test hit</button><strong id="count" style="display:block;font-size:72px">0</strong><script>async function refresh(){const r=await fetch(\'/api/test/stats\');document.getElementById(\'count\').textContent=(await r.json()).totalViews}refresh();</script></main></body></html>'); });
 
-// Keep the validator referenced in this module so the production function bundle includes it.
 void validateTarget;
