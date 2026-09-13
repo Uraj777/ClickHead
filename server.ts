@@ -66,10 +66,464 @@ const DIURNAL_WEIGHTS = [
 // Active running tasks map for stop/abort functionality
 const activeSessions = new Map<string, { abort: () => void }>();
 
+// In-memory view counter state for live testing
+interface VisitRecord {
+  id: number;
+  timestamp: string;
+  userAgent: string;
+  referer: string;
+  ip: string;
+  path: string;
+  secChUa?: string;
+}
+
+let serverViewCounter = 0;
+const recentVisits: VisitRecord[] = [];
+
 // API: Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
+
+// API: Record view / hit (Supports GET and POST for Go CLI and Web tests)
+app.all(['/api/test/visit', '/api/test-counter', '/api/counter'], (req, res) => {
+  serverViewCounter++;
+  const visit: VisitRecord = {
+    id: serverViewCounter,
+    timestamp: new Date().toISOString(),
+    userAgent: (req.headers['user-agent'] as string) || 'Unknown User-Agent',
+    referer: (req.headers['referer'] as string) || 'Direct Visit (No Referer)',
+    ip: req.ip || (req.socket.remoteAddress as string) || '127.0.0.1',
+    path: req.originalUrl || req.url,
+    secChUa: (req.headers['sec-ch-ua'] as string) || undefined,
+  };
+
+  recentVisits.unshift(visit);
+  if (recentVisits.length > 200) {
+    recentVisits.pop();
+  }
+
+  // If request is from browser expecting HTML, or curl expecting text/json
+  if (req.accepts('html') && !req.accepts('json')) {
+    res.redirect('/test-page');
+    return;
+  }
+
+  res.json({
+    success: true,
+    totalViews: serverViewCounter,
+    currentVisit: visit,
+    message: `View successfully registered (#${serverViewCounter})`,
+  });
+});
+
+// API: Get view count stats
+app.get('/api/test/stats', (req, res) => {
+  res.json({
+    totalViews: serverViewCounter,
+    recentVisits: recentVisits.slice(0, 50),
+    lastVisit: recentVisits[0] || null,
+  });
+});
+
+// API: Reset view counter
+app.post('/api/test/reset', (req, res) => {
+  serverViewCounter = 0;
+  recentVisits.length = 0;
+  res.json({
+    success: true,
+    totalViews: 0,
+    message: 'View counter reset to 0',
+  });
+});
+
+// API: Batch simulate hits (e.g. inject 10, 50, 100 hits directly)
+app.all('/api/test/batch-visit', (req, res) => {
+  const count = Math.min(500, Math.max(1, parseInt(req.body?.count || (req.query?.count as string), 10) || 50));
+  const created: VisitRecord[] = [];
+  
+  for (let i = 0; i < count; i++) {
+    serverViewCounter++;
+    const uaObj = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+    const referers = [
+      'https://www.google.com/search?q=organic+traffic+test',
+      'https://t.co/xyz789',
+      'https://www.bing.com/search',
+      'https://news.ycombinator.com/',
+      'Direct Visit (Bookmark/Direct Type)',
+    ];
+    const ref = referers[Math.floor(Math.random() * referers.length)];
+    const visit: VisitRecord = {
+      id: serverViewCounter,
+      timestamp: new Date(Date.now() - (count - i) * 150).toISOString(),
+      userAgent: uaObj.ua,
+      referer: ref,
+      ip: `198.51.100.${Math.floor(Math.random() * 250) + 1}`,
+      path: '/api/test/visit',
+      secChUa: uaObj.secChUa,
+    };
+    recentVisits.unshift(visit);
+    created.push(visit);
+  }
+
+  if (recentVisits.length > 200) {
+    recentVisits.length = 200;
+  }
+
+  res.json({
+    success: true,
+    added: count,
+    totalViews: serverViewCounter,
+    recentVisits: recentVisits.slice(0, 50),
+    message: `Registered ${count} views successfully. Total views is now ${serverViewCounter}.`,
+  });
+});
+
+// Standalone Independent Test Page (100% independent from main React app)
+app.get('/test-page', (req, res) => {
+  serverViewCounter++;
+  const visit: VisitRecord = {
+    id: serverViewCounter,
+    timestamp: new Date().toISOString(),
+    userAgent: (req.headers['user-agent'] as string) || 'Browser Visit',
+    referer: (req.headers['referer'] as string) || 'Direct Navigation',
+    ip: req.ip || (req.socket.remoteAddress as string) || '127.0.0.1',
+    path: '/test-page',
+    secChUa: (req.headers['sec-ch-ua'] as string) || undefined,
+  };
+  recentVisits.unshift(visit);
+  if (recentVisits.length > 200) recentVisits.pop();
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClickHead &bull; Standalone View Counter Test Page</title>
+  <style>
+    :root {
+      --bg: #07110C;
+      --card-bg: #0C1A12;
+      --border: #1E3E2B;
+      --accent: #B4F82C;
+      --text: #E8EDE0;
+      --text-muted: #9BB0A3;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    .container {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #152E20;
+      color: var(--accent);
+      border: 1px solid #27533B;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      align-self: flex-start;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .counter-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 2.5rem 1rem;
+      background: #050C08;
+      border: 2px solid var(--border);
+      border-radius: 1.25rem;
+      margin: 1.5rem 0;
+    }
+    .counter-label {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.5rem;
+      font-family: monospace;
+    }
+    .counter-number {
+      font-size: 5rem;
+      font-weight: 900;
+      color: var(--accent);
+      font-family: monospace;
+      line-height: 1;
+      letter-spacing: -0.05em;
+      text-shadow: 0 0 30px rgba(180, 248, 44, 0.25);
+    }
+    .counter-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.75rem;
+      font-family: monospace;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    button, .btn-link {
+      background: #112419;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: monospace;
+    }
+    button:hover, .btn-link:hover {
+      background: #183624;
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.btn-accent {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      font-weight: 900;
+    }
+    button.btn-accent:hover {
+      background: #C8FF47;
+    }
+    .logs-box {
+      background: #050C08;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1rem;
+      max-height: 280px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.75rem;
+    }
+    .log-item {
+      padding: 0.5rem;
+      border-bottom: 1px solid #112419;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .log-item:last-child { border-bottom: none; }
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .log-ua {
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .target-url-box {
+      background: #07110C;
+      border: 1px dashed var(--border);
+      border-radius: 0.75rem;
+      padding: 0.75rem 1rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      word-break: break-all;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">
+      <div class="pulse-dot"></div>
+      STANDALONE TEST BENCH &bull; 100% INDEPENDENT
+    </div>
+
+    <div class="card">
+      <h1 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em;">
+        Live View Count Target Page
+      </h1>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+        This page runs independently. Persistent view counts are stored in browser localStorage & synchronized with incoming HTTP requests.
+      </p>
+
+      <div class="counter-display">
+        <div class="counter-label">Total Verified Views</div>
+        <div class="counter-number" id="view-count-number">${serverViewCounter}</div>
+        <div class="counter-sub" id="counter-storage-status">Saved in Browser LocalStorage + Server State</div>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <div style="font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; font-family: monospace;">
+          Target Endpoint for Load Testing / Go Script:
+        </div>
+        <div class="target-url-box">
+          <span id="target-endpoint-url"></span>
+          <button onclick="copyTargetUrl()" style="padding: 0.35rem 0.65rem; font-size: 0.7rem;">Copy</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-accent" onclick="manualIncrement()">+1 View (Simulate Visit)</button>
+        <button onclick="refreshStats()">Sync & Refresh</button>
+        <button onclick="resetCounter()" style="color: #f87171; border-color: #7f1d1d;">Reset to 0</button>
+        <a href="/" class="btn-link">&larr; Open ClickHead App</a>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="font-size: 1rem; font-weight: 800; text-transform: uppercase; font-family: monospace;">
+          Real-Time HTTP Request Stream (<span id="visit-count-badge">${recentVisits.length}</span>)
+        </h2>
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">Auto-polling active</span>
+      </div>
+
+      <div class="logs-box" id="logs-container">
+        ${recentVisits.map(v => `
+          <div class="log-item">
+            <div class="log-header">
+              <span>View #${v.id} &bull; ${v.path}</span>
+              <span>${v.timestamp.substring(11, 19)}</span>
+            </div>
+            <div class="log-ua">${v.userAgent}</div>
+            <div style="font-size: 0.7rem; color: #6b8f78;">Referer: ${v.referer}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'clickhead_persistent_view_count';
+    const ENDPOINT = window.location.origin + '/api/test/visit';
+    document.getElementById('target-endpoint-url').innerText = ENDPOINT;
+
+    // LocalStorage initialization
+    let localCount = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+    const serverCount = ${serverViewCounter};
+    const finalCount = Math.max(localCount, serverCount);
+    localStorage.setItem(STORAGE_KEY, String(finalCount));
+    document.getElementById('view-count-number').innerText = finalCount;
+
+    function copyTargetUrl() {
+      navigator.clipboard.writeText(ENDPOINT);
+      alert('Copied endpoint URL to clipboard: ' + ENDPOINT);
+    }
+
+    async function manualIncrement() {
+      try {
+        const res = await fetch('/api/test/visit');
+        const data = await res.json();
+        const updated = Math.max(data.totalViews, (parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10) + 1));
+        localStorage.setItem(STORAGE_KEY, String(updated));
+        document.getElementById('view-count-number').innerText = updated;
+        refreshStats();
+      } catch (err) {
+        let count = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10) + 1;
+        localStorage.setItem(STORAGE_KEY, String(count));
+        document.getElementById('view-count-number').innerText = count;
+      }
+    }
+
+    async function resetCounter() {
+      if (!confirm('Reset view counter back to 0?')) return;
+      localStorage.setItem(STORAGE_KEY, '0');
+      try {
+        await fetch('/api/test/reset', { method: 'POST' });
+      } catch (e) {}
+      document.getElementById('view-count-number').innerText = '0';
+      document.getElementById('logs-container').innerHTML = '<div style="color: #6b8f78; padding: 1rem; text-align: center;">Counter reset to 0. Waiting for visits...</div>';
+      document.getElementById('visit-count-badge').innerText = '0';
+    }
+
+    async function refreshStats() {
+      try {
+        const res = await fetch('/api/test/stats');
+        const data = await res.json();
+        const local = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+        const maxVal = Math.max(local, data.totalViews);
+        localStorage.setItem(STORAGE_KEY, String(maxVal));
+        document.getElementById('view-count-number').innerText = maxVal;
+        document.getElementById('visit-count-badge').innerText = data.recentVisits.length;
+
+        const container = document.getElementById('logs-container');
+        if (data.recentVisits.length === 0) {
+          container.innerHTML = '<div style="color: #6b8f78; padding: 1rem; text-align: center;">No visits logged yet. Send requests from ClickHead or Go CLI!</div>';
+        } else {
+          container.innerHTML = data.recentVisits.map(v => \`
+            <div class="log-item">
+              <div class="log-header">
+                <span>View #\${v.id} &bull; \${v.path}</span>
+                <span>\${v.timestamp.substring(11, 19)}</span>
+              </div>
+              <div class="log-ua">\${v.userAgent}</div>
+              <div style="font-size: 0.7rem; color: #6b8f78;">Referer: \${v.referer}</div>
+            </div>
+          \`).join('');
+        }
+      } catch (err) {
+        console.error('Stats poll failed', err);
+      }
+    }
+
+    // Auto-poll stats every 1.5 seconds
+    setInterval(refreshStats, 1500);
+  </script>
+</body>
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
 
 // API: Abort an active traffic session
 app.post('/api/traffic/stop', (req, res) => {
@@ -86,6 +540,8 @@ app.post('/api/traffic/stop', (req, res) => {
 // API: Real Server-Side Concurrent HTTP Traffic Stream (SSE)
 app.get('/api/traffic/stream', async (req, res) => {
   const targetUrl = (req.query.targetUrl as string) || 'https://httpbin.org/get';
+  const subPathsRaw = (req.query.subPaths as string) || '';
+  const enableMultiPage = req.query.enableMultiPage === 'true';
   const totalRequests = Math.min(2000, Math.max(1, parseInt(req.query.totalRequests as string, 10) || 20));
   const concurrency = Math.min(50, Math.max(1, parseInt(req.query.concurrency as string, 10) || 3));
   let delayMs = Math.max(0, parseInt(req.query.delayMs as string, 10) || 1000);
@@ -96,9 +552,22 @@ app.get('/api/traffic/stream', async (req, res) => {
   const timeoutSeconds = Math.max(1, parseInt(req.query.timeoutSeconds as string, 10) || 10);
   const sessionId = (req.query.sessionId as string) || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+  // Parse subPaths
+  const subPaths: string[] = [];
+  if (subPathsRaw) {
+    for (const p of subPathsRaw.split(',')) {
+      const trimmed = p.trim();
+      if (trimmed) {
+        subPaths.push(trimmed.startsWith('/') || trimmed.startsWith('http') ? trimmed : `/${trimmed}`);
+      }
+    }
+  }
+  if (subPaths.length === 0) {
+    subPaths.push('/');
+  }
+
   // If time distribution window is set (> 0 minutes), compute realistic human interval
   if (distributionMinutes > 0) {
-    const totalSeconds = distributionMinutes * 60;
     let effectiveViewsPerHour = totalRequests / (distributionMinutes / 60);
     
     if (useDiurnal && distributionMinutes >= 60) {
@@ -113,10 +582,16 @@ app.get('/api/traffic/stream', async (req, res) => {
     jitterMs = Math.round(delayMs * 0.35); // 35% natural jitter
   }
 
+  // Support relative targetUrl or local URLs
+  let effectiveTarget = targetUrl;
+  if (effectiveTarget.startsWith('/')) {
+    effectiveTarget = `http://127.0.0.1:3000${effectiveTarget}`;
+  }
+
   // Validate URL format
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(targetUrl);
+    parsedUrl = new URL(effectiveTarget);
     if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
       res.status(400).json({ error: 'URL must use http or https protocol' });
       return;
@@ -240,11 +715,36 @@ app.get('/api/traffic/stream', async (req, res) => {
     let isSuccess = false;
     let errorMsg: string | undefined;
 
+    let requestUrl = effectiveTarget;
+    if (enableMultiPage && subPaths.length > 1) {
+      const chosenPath = subPaths[Math.floor(Math.random() * subPaths.length)];
+      if (chosenPath.startsWith('http')) {
+        requestUrl = chosenPath;
+      } else {
+        requestUrl = `${effectiveTarget.replace(/\/+$/, '')}${chosenPath}`;
+      }
+    }
+
+    // Route test endpoint requests directly to internal localhost to ensure 100% reliable local hit delivery
+    if (
+      requestUrl.includes('/api/test/visit') ||
+      requestUrl.includes('/test-page') ||
+      requestUrl.includes('/api/test-counter') ||
+      requestUrl.includes('/api/counter')
+    ) {
+      try {
+        const u = new URL(requestUrl);
+        requestUrl = `http://127.0.0.1:3000${u.pathname}${u.search}`;
+      } catch (e) {
+        requestUrl = 'http://127.0.0.1:3000/api/test/visit';
+      }
+    }
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
 
-      const fetchPromise = fetch(targetUrl, {
+      const fetchPromise = fetch(requestUrl, {
         method: 'GET',
         headers,
         redirect: 'follow',
@@ -293,7 +793,7 @@ app.get('/api/traffic/stream', async (req, res) => {
     const metric = {
       id: reqId,
       workerId,
-      url: targetUrl,
+      url: requestUrl,
       statusCode,
       durationMs,
       timestamp,
@@ -315,8 +815,8 @@ app.get('/api/traffic/stream', async (req, res) => {
         statusCode,
         latencyMs: durationMs,
         message: isSuccess
-          ? `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} HTTP ${statusCode} in ${durationMs}ms | ${uaObj.name} | ${bytesRead} bytes`
-          : `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} FAIL (${errorMsg || `HTTP ${statusCode}`}) in ${durationMs}ms`,
+          ? `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} HTTP ${statusCode} in ${durationMs}ms | ${uaObj.name} | ${requestUrl}`
+          : `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} FAIL (${errorMsg || `HTTP ${statusCode}`}) in ${durationMs}ms | ${requestUrl}`,
       },
     });
   };

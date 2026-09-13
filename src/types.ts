@@ -2,6 +2,8 @@ export type DistributionMode = 'instant' | 'spread-15m' | 'spread-1h' | 'spread-
 
 export interface LoadTestConfig {
   targetUrl: string;
+  subPaths: string[];         // e.g. ["/", "/about", "/pricing", "/blog"] for realistic multi-page sessions
+  enableMultiPage: boolean;   // simulate authentic multi-page browsing journeys
   totalRequests: number;
   concurrency: number;
   delayMs: number;
@@ -13,11 +15,15 @@ export interface LoadTestConfig {
   referer: string;
   acceptEncoding: boolean;
   keepAlive: boolean;
+  // Proxy pool rotation
+  proxyUrl?: string;          // single proxy or comma-separated list of proxies (http/https/socks5)
+  enableProxyRotation: boolean;
   // Day distribution parameters
   distributionMode: DistributionMode;
   distributionMinutes: number; // total window in minutes
   useDiurnalCurve: boolean;    // human 24h bell curve
 }
+
 
 export interface TrafficPreset {
   id: string;

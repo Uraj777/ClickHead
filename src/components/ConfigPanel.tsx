@@ -269,6 +269,90 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
       </div>
 
+      {/* Multi-Page Subpath Navigation & Proxy Pool Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Multi-Page Browsing Depth */}
+        <div className="bg-[#07110C] border-2 border-[#1E3E2B] rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-[#B4F82C]" />
+              Multi-Page Browsing Paths
+            </span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                disabled={isSimulating}
+                checked={config.enableMultiPage}
+                onChange={(e) => onChange({ enableMultiPage: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-10 h-5 bg-[#142D1F] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#B4F82C] peer-checked:after:bg-black"></div>
+            </label>
+          </div>
+          {config.enableMultiPage ? (
+            <div className="space-y-1.5 pt-1">
+              <input
+                type="text"
+                disabled={isSimulating}
+                value={(config.subPaths || []).join(', ')}
+                onChange={(e) => {
+                  const paths = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                  onChange({ subPaths: paths });
+                }}
+                placeholder="/, /about, /pricing, /features, /blog"
+                className="w-full px-3 py-2 rounded-xl bg-[#0C1A12] border border-[#1E3E2B] text-xs text-white placeholder-[#43634F] focus:outline-none focus:border-[#B4F82C] font-mono"
+              />
+              <p className="text-[10px] text-[#9BB0A3]">
+                Randomly distributes visitor sessions across specified subpages to mimic authentic user site exploration.
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-[#9BB0A3]">
+              Simulates single-page landings. Turn on to spread visitor sessions across multiple subpages (e.g. /about, /pricing).
+            </p>
+          )}
+        </div>
+
+        {/* Rotating Proxy Pool */}
+        <div className="bg-[#07110C] border-2 border-[#1E3E2B] rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-[#B4F82C]" />
+              Rotating Proxy Pool
+            </span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                disabled={isSimulating}
+                checked={config.enableProxyRotation}
+                onChange={(e) => onChange({ enableProxyRotation: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-10 h-5 bg-[#142D1F] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#B4F82C] peer-checked:after:bg-black"></div>
+            </label>
+          </div>
+          {config.enableProxyRotation ? (
+            <div className="space-y-1.5 pt-1">
+              <input
+                type="text"
+                disabled={isSimulating}
+                value={config.proxyUrl || ''}
+                onChange={(e) => onChange({ proxyUrl: e.target.value })}
+                placeholder="http://proxy1:8080, http://user:pass@proxy2:8080"
+                className="w-full px-3 py-2 rounded-xl bg-[#0C1A12] border border-[#1E3E2B] text-xs text-white placeholder-[#43634F] focus:outline-none focus:border-[#B4F82C] font-mono"
+              />
+              <p className="text-[10px] text-[#9BB0A3]">
+                Supports HTTP, HTTPS, and SOCKS5 proxies. The Go engine will automatically rotate workers across these nodes.
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-[#9BB0A3]">
+              Direct connections enabled. Turn on to route CLI traffic through HTTP/SOCKS5 rotating proxies.
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Time-of-Day Diurnal Distribution Toggle */}
       <div className="bg-[#07110C] border-2 border-[#1E3E2B] rounded-2xl p-4 space-y-2">
         <div className="flex items-center justify-between">

@@ -36,6 +36,8 @@ export class TrafficSimulator {
 
     const queryParams = new URLSearchParams({
       targetUrl: this.config.targetUrl,
+      subPaths: (this.config.subPaths || []).join(','),
+      enableMultiPage: String(this.config.enableMultiPage || false),
       totalRequests: String(this.config.totalRequests),
       concurrency: String(this.config.concurrency),
       delayMs: String(this.config.delayMs),

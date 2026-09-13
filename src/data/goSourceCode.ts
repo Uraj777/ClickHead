@@ -1,16 +1,21 @@
 import { LoadTestConfig } from '../types';
 
 export function generateGoScript(config: LoadTestConfig): string {
-  return `// Package main implements an idiomatic, high-concurrency HTTP load testing
-// and realistic user traffic simulation engine in Go.
+  const defaultSubPaths = config.subPaths && config.subPaths.length > 0
+    ? config.subPaths.join(',')
+    : '/,/about,/pricing,/features';
+
+  return `// Package main implements an enterprise-grade, high-concurrency HTTP load testing
+// and realistic organic web traffic simulation daemon in Go.
 //
-// Architected by Senior Backend Systems Engineer standards:
+// Systems Architecture Highlights:
 // - Worker Pool pattern using native goroutines, buffered channels, and sync.WaitGroup
-// - Tuned http.Transport with connection reuse (Keep-Alive) and custom timeouts
-// - Realistic User-Agent rotation and HTTP headers to simulate authentic browsing
-// - Pacing and randomized human jitter distribution
-// - Thread-safe atomic metrics aggregation and latency percentile calculation (P50, P90, P99)
-// - ANSI-styled terminal output with real-time progress and summary statistics
+// - Multi-path / subpage session navigation (mimicking real user browsing journeys)
+// - SOCKS5 / HTTP / HTTPS rotating proxy pool support with per-worker connection pooling
+// - Realistic User-Agent rotation, Client Hints (Sec-CH-UA), and Referer spoofing
+// - Automatic cookie jar persistence across multi-step session requests
+// - Human pacing with randomized microsecond/millisecond jitter and 24-hour diurnal curve
+// - Zero-allocation thread-safe atomic metrics aggregation (P50, P90, P95, P99)
 package main
 
 import (
@@ -21,6 +26,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"os/signal"
@@ -109,31 +115,38 @@ var diurnalHourlyWeights = [24]float64{
 
 // Config encapsulates all CLI runtime options
 type Config struct {
-	TargetURL      string
-	TotalRequests  int
-	Concurrency    int
-	BaseDelay      time.Duration
-	JitterDelay    time.Duration
-	Duration       time.Duration
-	DiurnalCurve   bool
-	Timeout        time.Duration
-	Referer        string
-	FollowRedirect bool
-	InsecureTLS    bool
-	CustomUA       string
-	Verbose        bool
+	TargetURL       string
+	SubPathsRaw     string
+	SubPaths        []string
+	EnableMultiPage bool
+	TotalRequests   int
+	Concurrency     int
+	BaseDelay       time.Duration
+	JitterDelay     time.Duration
+	Duration        time.Duration
+	DiurnalCurve    bool
+	Timeout         time.Duration
+	Referer         string
+	FollowRedirect  bool
+	InsecureTLS     bool
+	CustomUA        string
+	ProxyRaw        string
+	Proxies         []*url.URL
+	Verbose         bool
 }
 
 // RequestResult holds the outcome of a single HTTP call
 type RequestResult struct {
 	WorkerID     int
 	RequestID    int
+	TargetURL    string
 	StatusCode   int
 	Duration     time.Duration
 	BytesRead    int64
 	Err          error
 	Timestamp    time.Time
 	UserAgentTag string
+	ProxyUsed    string
 }
 
 // MetricsCollector aggregates real-time and summary telemetry
@@ -183,20 +196,55 @@ func (m *MetricsCollector) Record(res RequestResult) {
 func main() {
 	// Parse CLI flags with sensible production defaults
 	cfg := Config{}
-	flag.StringVar(&cfg.TargetURL, "url", "${config.targetUrl || 'https://httpbin.org/get'}", "Target URL to test/simulate traffic on")
-	flag.IntVar(&cfg.TotalRequests, "requests", ${config.totalRequests || 100}, "Total number of HTTP requests to execute")
+	flag.StringVar(&cfg.TargetURL, "url", "${config.targetUrl || 'https://httpbin.org/get'}", "Target website base URL")
+	flag.StringVar(&cfg.SubPathsRaw, "paths", "${defaultSubPaths}", "Comma-separated sub-paths for multi-page visitor simulation")
+	flag.BoolVar(&cfg.EnableMultiPage, "multipage", ${config.enableMultiPage || false}, "Simulate multi-page browsing journeys (landing -> subpages)")
+	flag.IntVar(&cfg.TotalRequests, "requests", ${config.totalRequests || 100}, "Total number of HTTP sessions/requests to execute")
 	flag.IntVar(&cfg.Concurrency, "concurrency", ${config.concurrency || 5}, "Concurrency limit (number of parallel worker goroutines)")
-	flag.DurationVar(&cfg.BaseDelay, "delay", ${config.delayMs || 1000} * time.Millisecond, "Base pacing delay between requests per worker (e.g., 500ms, 1s)")
-	flag.DurationVar(&cfg.JitterDelay, "jitter", ${config.jitterMs || 500} * time.Millisecond, "Max randomized jitter added to base delay for realistic human pacing")
-	flag.DurationVar(&cfg.Duration, "duration", ${config.distributionMinutes ? config.distributionMinutes + ' * time.Minute' : '0'}, "Total time spread window (e.g., 24h, 6h, 1h, 15m, 0s). 0 = immediate")
+	flag.DurationVar(&cfg.BaseDelay, "delay", ${config.delayMs || 1000} * time.Millisecond, "Base pacing delay between requests per worker")
+	flag.DurationVar(&cfg.JitterDelay, "jitter", ${config.jitterMs || 500} * time.Millisecond, "Max randomized jitter added to base delay")
+	flag.DurationVar(&cfg.Duration, "duration", ${config.distributionMinutes ? config.distributionMinutes + ' * time.Minute' : '0'}, "Total time spread window (e.g. 24h, 1h, 15m, 0s). 0 = immediate")
 	flag.BoolVar(&cfg.DiurnalCurve, "diurnal", ${config.useDiurnalCurve || false}, "Apply natural 24-hour diurnal human waking/sleeping curve")
 	flag.DurationVar(&cfg.Timeout, "timeout", ${config.timeoutSeconds || 10} * time.Second, "HTTP request timeout per attempt")
-	flag.StringVar(&cfg.Referer, "referer", "${config.referer || 'https://www.google.com/'}", "Custom HTTP Referer header to mimic search or social discovery")
+	flag.StringVar(&cfg.Referer, "referer", "${config.referer || 'https://www.google.com/'}", "HTTP Referer header (e.g., https://www.google.com/)")
+	flag.StringVar(&cfg.ProxyRaw, "proxy", "${config.proxyUrl || ''}", "Single proxy or comma-separated rotating proxy pool (http://, https://, socks5://)")
 	flag.BoolVar(&cfg.FollowRedirect, "redirects", ${config.followRedirects !== false}, "Follow HTTP 3xx redirects automatically")
 	flag.BoolVar(&cfg.InsecureTLS, "insecure", false, "Skip TLS/SSL certificate verification")
 	flag.StringVar(&cfg.CustomUA, "ua", "", "Override User-Agent (leave blank for realistic browser rotation)")
 	flag.BoolVar(&cfg.Verbose, "v", false, "Print detailed log for every single request")
 	flag.Parse()
+
+	// Parse sub-paths
+	if cfg.SubPathsRaw != "" {
+		parts := strings.Split(cfg.SubPathsRaw, ",")
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				if !strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "http") {
+					trimmed = "/" + trimmed
+				}
+				cfg.SubPaths = append(cfg.SubPaths, trimmed)
+			}
+		}
+	}
+	if len(cfg.SubPaths) == 0 {
+		cfg.SubPaths = []string{"/"}
+	}
+
+	// Parse proxy pool
+	if cfg.ProxyRaw != "" {
+		for _, p := range strings.Split(cfg.ProxyRaw, ",") {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				if !strings.Contains(trimmed, "://") {
+					trimmed = "http://" + trimmed
+				}
+				if u, err := url.Parse(trimmed); err == nil {
+					cfg.Proxies = append(cfg.Proxies, u)
+				}
+			}
+		}
+	}
 
 	// Validate target URL
 	parsedURL, err := url.ParseRequestURI(cfg.TargetURL)
@@ -226,26 +274,6 @@ func main() {
 		cancel()
 	}()
 
-	// Build optimized HTTP Client Transport
-	transport := &http.Transport{
-		MaxIdleConns:        cfg.Concurrency * 4,
-		MaxIdleConnsPerHost: cfg.Concurrency * 2,
-		IdleConnTimeout:     90 * time.Second,
-		DisableKeepAlives:   false,
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: cfg.InsecureTLS},
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   cfg.Timeout,
-	}
-
-	if !cfg.FollowRedirect {
-		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		}
-	}
-
 	// Channels for Worker Pool pattern
 	jobs := make(chan int, cfg.TotalRequests)
 	results := make(chan RequestResult, cfg.TotalRequests)
@@ -256,9 +284,10 @@ func main() {
 		Latencies: make([]time.Duration, 0, cfg.TotalRequests),
 	}
 
-	// Start Worker Goroutines
+	// Start Worker Goroutines with dedicated clients and cookie jars
 	for workerID := 1; workerID <= cfg.Concurrency; workerID++ {
 		wg.Add(1)
+		client := buildWorkerClient(&cfg, workerID)
 		go worker(ctx, workerID, &cfg, client, jobs, results, &wg)
 	}
 
@@ -276,8 +305,6 @@ func main() {
 	go func() {
 		defer collectorWg.Done()
 		var processed int64
-		ticker := time.NewTicker(300 * time.Millisecond)
-		defer ticker.Stop()
 
 		for res := range results {
 			metrics.Record(res)
@@ -298,6 +325,40 @@ func main() {
 
 	metrics.EndTime = time.Now()
 	printFinalReport(cfg, metrics)
+}
+
+// buildWorkerClient constructs an isolated HTTP client with proxy and cookie jar
+func buildWorkerClient(cfg *Config, workerID int) *http.Client {
+	jar, _ := cookiejar.New(nil)
+
+	transport := &http.Transport{
+		MaxIdleConns:        10,
+		MaxIdleConnsPerHost: 5,
+		IdleConnTimeout:     60 * time.Second,
+		DisableKeepAlives:   false,
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: cfg.InsecureTLS},
+	}
+
+	// Attach rotating proxy if configured
+	if len(cfg.Proxies) > 0 {
+		proxyIndex := (workerID - 1) % len(cfg.Proxies)
+		selectedProxy := cfg.Proxies[proxyIndex]
+		transport.Proxy = http.ProxyURL(selectedProxy)
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   cfg.Timeout,
+		Jar:       jar,
+	}
+
+	if !cfg.FollowRedirect {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+
+	return client
 }
 
 // worker represents a single consumer in the worker pool
@@ -360,8 +421,20 @@ func worker(
 				}
 			}
 
+			// Determine target URL: base or subpage path
+			targetURL := cfg.TargetURL
+			if cfg.EnableMultiPage && len(cfg.SubPaths) > 1 {
+				path := cfg.SubPaths[rng.Intn(len(cfg.SubPaths))]
+				if strings.HasPrefix(path, "http") {
+					targetURL = path
+				} else {
+					base := strings.TrimRight(cfg.TargetURL, "/")
+					targetURL = base + path
+				}
+			}
+
 			// Execute HTTP Request
-			result := sendHTTPRequest(ctx, workerID, reqID, cfg, client, rng)
+			result := sendHTTPRequest(ctx, workerID, reqID, targetURL, cfg, client, rng)
 
 			select {
 			case results <- result:
@@ -376,17 +449,19 @@ func worker(
 func sendHTTPRequest(
 	ctx context.Context,
 	workerID, reqID int,
+	targetURL string,
 	cfg *Config,
 	client *http.Client,
 	rng *rand.Rand,
 ) RequestResult {
 	start := time.Now()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.TargetURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return RequestResult{
 			WorkerID:  workerID,
 			RequestID: reqID,
+			TargetURL: targetURL,
 			Duration:  time.Since(start),
 			Err:       err,
 			Timestamp: start,
@@ -426,6 +501,12 @@ func sendHTTPRequest(
 		req.Header.Set("Referer", cfg.Referer)
 	}
 
+	proxyStr := "Direct"
+	if len(cfg.Proxies) > 0 {
+		proxyIndex := (workerID - 1) % len(cfg.Proxies)
+		proxyStr = cfg.Proxies[proxyIndex].Host
+	}
+
 	resp, err := client.Do(req)
 	duration := time.Since(start)
 
@@ -433,10 +514,12 @@ func sendHTTPRequest(
 		return RequestResult{
 			WorkerID:     workerID,
 			RequestID:    reqID,
+			TargetURL:    targetURL,
 			Duration:     duration,
 			Err:          err,
 			Timestamp:    start,
 			UserAgentTag: uaProfile.Name,
+			ProxyUsed:    proxyStr,
 		}
 	}
 	defer resp.Body.Close()
@@ -447,23 +530,32 @@ func sendHTTPRequest(
 	return RequestResult{
 		WorkerID:     workerID,
 		RequestID:    reqID,
+		TargetURL:    targetURL,
 		StatusCode:   resp.StatusCode,
 		Duration:     duration,
 		BytesRead:    bytesRead,
 		Timestamp:    start,
 		UserAgentTag: uaProfile.Name,
+		ProxyUsed:    proxyStr,
 	}
 }
 
 func printBanner(cfg Config) {
 	fmt.Printf("%s%s========================================================================%s\\n", ColorCyan, ColorBold, ColorReset)
-	fmt.Printf("%s%s       GOLANG REALISTIC HTTP TRAFFIC SIMULATOR & LOAD TESTER           %s\\n", ColorCyan, ColorBold, ColorReset)
+	fmt.Printf("%s%s         CLICKHEAD &bull; REALISTIC GO TRAFFIC ENGINE & DAEMON          %s\\n", ColorCyan, ColorBold, ColorReset)
 	fmt.Printf("%s%s========================================================================%s\\n", ColorCyan, ColorBold, ColorReset)
 	fmt.Printf("  %sTarget URL:%s        %s\\n", ColorBold, ColorReset, cfg.TargetURL)
+	if cfg.EnableMultiPage {
+		fmt.Printf("  %sMulti-Path Mode:%s   %s\\n", ColorBold, ColorReset, strings.Join(cfg.SubPaths, ", "))
+	}
 	fmt.Printf("  %sTotal Requests:%s    %d\\n", ColorBold, ColorReset, cfg.TotalRequests)
 	fmt.Printf("  %sConcurrency:%s       %d Workers\\n", ColorBold, ColorReset, cfg.Concurrency)
 	fmt.Printf("  %sPacing / Delay:%s    %v (+ max %v jitter)\\n", ColorBold, ColorReset, cfg.BaseDelay, cfg.JitterDelay)
-	fmt.Printf("  %sTimeout:%s           %v\\n", ColorBold, ColorReset, cfg.Timeout)
+	if len(cfg.Proxies) > 0 {
+		fmt.Printf("  %sRotating Proxies:%s  %d active proxy nodes\\n", ColorBold, ColorReset, len(cfg.Proxies))
+	} else {
+		fmt.Printf("  %sProxy Routing:%s     Direct (No proxy specified)\\n", ColorBold, ColorReset)
+	}
 	fmt.Printf("  %sUser-Agent Pool:%s   %d Realistic Desktop & Mobile Profiles\\n", ColorBold, ColorReset, len(realisticUserAgents))
 	if cfg.Referer != "" {
 		fmt.Printf("  %sReferer:%s           %s\\n", ColorBold, ColorReset, cfg.Referer)
@@ -510,9 +602,9 @@ func printRequestLog(res RequestResult) {
 		statusColor = ColorYellow
 	}
 
-	fmt.Printf("[%s] [Worker %02d] #%04d %sHTTP %d%s in %6v | %s | %d bytes\\n",
+	fmt.Printf("[%s] [Worker %02d] #%04d %sHTTP %d%s in %6v | %s | %s | %d bytes\\n",
 		timeStr, res.WorkerID, res.RequestID, statusColor, res.StatusCode, ColorReset,
-		res.Duration.Round(time.Millisecond), res.UserAgentTag, res.BytesRead)
+		res.Duration.Round(time.Millisecond), res.UserAgentTag, res.ProxyUsed, res.BytesRead)
 }
 
 func printFinalReport(cfg Config, m *MetricsCollector) {
@@ -583,3 +675,4 @@ func printFinalReport(cfg Config, m *MetricsCollector) {
 }
 `;
 }
+

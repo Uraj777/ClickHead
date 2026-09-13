@@ -9,12 +9,15 @@ import { LiveSimulator } from './components/LiveSimulator';
 import { GoCodeViewer } from './components/GoCodeViewer';
 import { NormalTrafficGuide } from './components/NormalTrafficGuide';
 import { ArchitectureModal } from './components/ArchitectureModal';
+import { ViewCountTester } from './components/ViewCountTester';
 import { ClickHeadLogo } from './components/ClickHeadLogo';
-import { Terminal, Code2, Play, SlidersHorizontal, Sun, Layers } from 'lucide-react';
+import { Terminal, Code2, Play, SlidersHorizontal, Sun, Layers, Eye } from 'lucide-react';
 
 export default function App() {
   const [config, setConfig] = useState<LoadTestConfig>({
     targetUrl: 'https://httpbin.org/get',
+    subPaths: ['/', '/about', '/pricing', '/features'],
+    enableMultiPage: false,
     totalRequests: 100,
     concurrency: 3,
     delayMs: 1500,
@@ -25,6 +28,8 @@ export default function App() {
     referer: 'https://www.google.com/',
     acceptEncoding: true,
     keepAlive: true,
+    proxyUrl: '',
+    enableProxyRotation: false,
     distributionMode: 'spread-1h',
     distributionMinutes: 60,
     useDiurnalCurve: true,
@@ -34,7 +39,7 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isArchitectureOpen, setIsArchitectureOpen] = useState<boolean>(false);
-  const [activeMode, setActiveMode] = useState<'simple' | 'simulator' | 'code' | 'advanced'>('simple');
+  const [activeMode, setActiveMode] = useState<'simple' | 'simulator' | 'counter' | 'code' | 'advanced'>('simple');
 
   const handleConfigChange = (updated: Partial<LoadTestConfig>) => {
     setConfig((prev) => ({ ...prev, ...updated }));
@@ -68,6 +73,7 @@ export default function App() {
       <Header
         onOpenGuide={() => setIsGuideOpen(true)}
         onOpenArchitecture={() => setIsArchitectureOpen(true)}
+        onOpenTestPage={() => setActiveMode('counter')}
         onDownloadGoFile={handleDownloadGoFile}
         onSelectOrganicPreset={() => handleApplyPreset('organic-drip')}
       />
@@ -86,11 +92,8 @@ export default function App() {
                   : 'text-[#9BB0A3] hover:text-white hover:bg-[#132A1D]'
               }`}
             >
-              <Sun className="w-4 h-4 text-black" />
-              <span>Simple Day Planner</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/20 text-black font-mono font-bold hidden sm:inline-block">
-                EASY
-              </span>
+              <Sun className="w-4 h-4" />
+              <span>Day Planner</span>
             </button>
 
             <button
@@ -107,6 +110,19 @@ export default function App() {
               {isSimulating && (
                 <span className="w-2 h-2 rounded-full bg-[#B4F82C] animate-ping"></span>
               )}
+            </button>
+
+            <button
+              id="nav-tab-counter"
+              onClick={() => setActiveMode('counter')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer uppercase tracking-wider ${
+                activeMode === 'counter'
+                  ? 'bg-[#B4F82C] text-black shadow-md shadow-[#B4F82C]/20'
+                  : 'text-[#9BB0A3] hover:text-white hover:bg-[#132A1D]'
+              }`}
+            >
+              <Eye className="w-4 h-4" />
+              <span>View Count Test Bench</span>
             </button>
 
             <button
@@ -169,7 +185,7 @@ export default function App() {
                 </h3>
                 <button
                   onClick={() => setActiveMode('simulator')}
-                  className="text-xs font-bold text-[#B4F82C] hover:underline cursor-pointer uppercase tracking-wider"
+                  className="text-xs font-bold text-[#B4F82C] hover:underline cursor-pointer uppercase tracking-wider font-mono"
                 >
                   Open Full Screen Terminal &rarr;
                 </button>
@@ -193,7 +209,22 @@ export default function App() {
           </div>
         )}
 
-        {/* MODE 3: Go Source Code Tab */}
+        {/* MODE 3: View Count Test Bench Tab */}
+        {activeMode === 'counter' && (
+          <div className="space-y-6">
+            <ViewCountTester
+              config={config}
+              onSetTargetUrl={(url) => handleConfigChange({ targetUrl: url })}
+              onStartTestDispatch={() => {
+                handleConfigChange({ totalRequests: 50, delayMs: 400, jitterMs: 200 });
+                setActiveMode('simulator');
+              }}
+              isSimulating={isSimulating}
+            />
+          </div>
+        )}
+
+        {/* MODE 4: Go Source Code Tab */}
         {activeMode === 'code' && (
           <div className="space-y-6">
             <GoCodeViewer
@@ -203,7 +234,7 @@ export default function App() {
           </div>
         )}
 
-        {/* MODE 4: Advanced Tuning Knobs */}
+        {/* MODE 5: Advanced Tuning Knobs */}
         {activeMode === 'advanced' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-5 space-y-6">
@@ -231,10 +262,17 @@ export default function App() {
           <div className="flex items-center gap-3">
             <ClickHeadLogo size="sm" showWordmark={true} />
             <span className="hidden sm:inline text-[#3F684F]">&bull;</span>
-            <span className="text-[11px] font-mono">Organic Traffic Engine</span>
+            <span className="text-[11px] font-mono text-[#E8EDE0]">Organic Traffic & Load Testing Engine</span>
           </div>
-          <div className="text-[11px] font-mono">
-            Golang 1.21+ &bull; Goroutines &bull; Atomic Telemetry &bull; Diurnal Scheduling
+          <div className="flex items-center gap-4 text-[11px] font-mono">
+            <button
+              onClick={handleDownloadGoFile}
+              className="text-[#B4F82C] hover:underline cursor-pointer"
+            >
+              Export main.go
+            </button>
+            <span className="text-[#3F684F]">&bull;</span>
+            <span className="text-[#9BB0A3]">Direct Local Execution</span>
           </div>
         </div>
       </footer>
@@ -254,4 +292,5 @@ export default function App() {
     </div>
   );
 }
+
 
