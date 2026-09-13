@@ -2,6 +2,31 @@ import { TrafficPreset } from '../types';
 
 export const TRAFFIC_PRESETS: TrafficPreset[] = [
   {
+    id: 'wordpress-jetpack',
+    name: 'WordPress & Jetpack Analytics (Fixed)',
+    tagline: 'Fires real Jetpack pixel.wp.com tracking beacons & WP AJAX counters',
+    category: 'organic',
+    icon: 'Sparkles',
+    badgeColor: 'text-[#B4F82C] bg-[#152E20] border-[#27533B]',
+    config: {
+      totalRequests: 100,
+      concurrency: 3,
+      delayMs: 1800,
+      jitterMs: 900,
+      timeoutSeconds: 10,
+      userAgentMode: 'realistic-rotation',
+      referer: 'https://www.google.com/search?q=banking+fraud+guide',
+      followRedirects: true,
+      keepAlive: true,
+      enableWordPressTracking: true,
+      jetpackBlogId: '175376211',
+    },
+    description:
+      'Specially designed for WordPress and Jetpack Stats. Fetches page HTML and automatically fires the client-side Jetpack stats pixel (pixel.wp.com/g.gif) and WordPress view counters so views register in wp-admin stats.',
+    recommendedFor: 'WordPress Jetpack Stats, WP-PostViews, Post Views Counter, and Google Analytics beacons.',
+    riskLevel: 'Very Low (Safe)'
+  },
+  {
     id: 'organic-drip',
     name: 'Normal Organic Traffic (Recommended)',
     tagline: 'Natural human browsing session simulation with variable jitter',

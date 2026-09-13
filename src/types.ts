@@ -18,6 +18,10 @@ export interface LoadTestConfig {
   // Proxy pool rotation
   proxyUrl?: string;          // single proxy or comma-separated list of proxies (http/https/socks5)
   enableProxyRotation: boolean;
+  // WordPress & Jetpack / Analytics Tracking
+  enableWordPressTracking?: boolean; // Automatically fires Jetpack stats pixel (pixel.wp.com) & WP AJAX counters
+  jetpackBlogId?: string;           // Optional explicit Jetpack Blog ID (e.g. 175376211)
+  wpPostId?: string;                // Optional WordPress Post ID (e.g. 1234)
   // Day distribution parameters
   distributionMode: DistributionMode;
   distributionMinutes: number; // total window in minutes

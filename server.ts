@@ -525,6 +525,40 @@ app.get('/test-page', (req, res) => {
 });
 
 
+// API: Dedicated Jetpack Pixel Dispatcher Test Endpoint
+app.get('/api/test/jetpack-beacon', async (req, res) => {
+  const blogId = (req.query.blogId as string) || '175376211';
+  const postId = (req.query.postId as string) || '0';
+  const host = (req.query.host as string) || 'bankingdigests.com';
+  const referer = (req.query.referer as string) || 'https://www.google.com/search?q=banking+fraud+guide';
+
+  const pixelUrl = `https://pixel.wp.com/g.gif?v=wpcom-no-pv&j=1%3A13.8&blog=${blogId}&post=${postId}&host=${encodeURIComponent(host)}&ref=${encodeURIComponent(referer)}&rand=${Math.random()}&baba=${Math.random().toString(36).substring(2, 9)}`;
+
+  try {
+    const start = performance.now();
+    const resp = await fetch(pixelUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Referer': `https://${host}/`,
+      }
+    });
+    const durationMs = Math.round(performance.now() - start);
+    res.json({
+      status: 'ok',
+      jetpackPixelStatus: resp.status,
+      durationMs,
+      pixelUrl,
+      blogId,
+      postId,
+      host,
+      message: `Jetpack pixel successfully dispatched to Automattic server (HTTP ${resp.status})`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API: Abort an active traffic session
 app.post('/api/traffic/stop', (req, res) => {
   const { sessionId } = req.body;
@@ -551,6 +585,9 @@ app.get('/api/traffic/stream', async (req, res) => {
   const referer = (req.query.referer as string) || '';
   const timeoutSeconds = Math.max(1, parseInt(req.query.timeoutSeconds as string, 10) || 10);
   const sessionId = (req.query.sessionId as string) || `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const enableWordPressTracking = req.query.enableWordPressTracking === 'true' || targetUrl.includes('bankingdigests');
+  const userJetpackBlogId = (req.query.jetpackBlogId as string) || '';
+  const userWpPostId = (req.query.wpPostId as string) || '';
 
   // Parse subPaths
   const subPaths: string[] = [];
@@ -740,6 +777,8 @@ app.get('/api/traffic/stream', async (req, res) => {
       }
     }
 
+    let extraLogInfo = '';
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
@@ -758,6 +797,75 @@ app.get('/api/traffic/stream', async (req, res) => {
       const arrayBuf = await response.arrayBuffer();
       bytesRead = arrayBuf.byteLength || 0;
       isSuccess = statusCode >= 200 && statusCode < 400;
+
+      // Handle WordPress & Jetpack Pixel Tracking for ANY page or site
+      if (isSuccess && (enableWordPressTracking || requestUrl.includes('wp-content') || requestUrl.includes('wp-admin') || bytesRead > 500)) {
+        try {
+          const htmlSnippet = Buffer.from(arrayBuf.slice(0, 50000)).toString('utf-8');
+          const targetHost = new URL(requestUrl).hostname;
+          
+          // 1. Universal Jetpack Blog ID Auto-Detection
+          let blogId = userJetpackBlogId;
+          if (!blogId) {
+            const blogMatch = 
+              htmlSnippet.match(/stats\.wp\.com\/e-.*?[?&]blog=(\d+)/i) || 
+              htmlSnippet.match(/pixel\.wp\.com\/g\.gif\?[^"']*?[?&]blog=(\d+)/i) || 
+              htmlSnippet.match(/['"]blog['"]\s*:\s*['"]?(\d+)/i) ||
+              htmlSnippet.match(/name=['"](?:jetpack-site-id|jetpack-boost-site-id)['"]\s+content=['"](\d+)['"]/i) ||
+              htmlSnippet.match(/data-blog=['"](\d+)['"]/i);
+            if (blogMatch && blogMatch[1]) {
+              blogId = blogMatch[1];
+            }
+          }
+
+          // 2. Universal WordPress Post ID Auto-Detection
+          let postId = userWpPostId;
+          if (!postId) {
+            const postMatch = 
+              htmlSnippet.match(/class="[^"]*postid-(\d+)/i) || 
+              htmlSnippet.match(/data-post-id=['"](\d+)['"]/i) || 
+              htmlSnippet.match(/[?&]p=(\d+)/i) || 
+              htmlSnippet.match(/['"]post['"]\s*:\s*['"]?(\d+)/i) ||
+              htmlSnippet.match(/<link\s+rel=['"]shortlink['"]\s+href=['"][^'"]*?[?&]p=(\d+)['"]/i);
+            if (postMatch && postMatch[1]) {
+              postId = postMatch[1];
+            }
+          }
+
+          // 3. Dispatch real Jetpack Tracking Pixel to Automattic Analytics
+          if (blogId) {
+            const randSeed = Math.random();
+            const babaSeed = Math.random().toString(36).substring(2, 9);
+            const pixelUrl = `https://pixel.wp.com/g.gif?v=wpcom-no-pv&j=1%3A13.8&blog=${blogId}&post=${postId || '0'}&host=${encodeURIComponent(targetHost)}&ref=${encodeURIComponent(referer || 'https://www.google.com/search?q=' + encodeURIComponent(targetHost))}&rand=${randSeed}&baba=${babaSeed}`;
+            
+            fetch(pixelUrl, {
+              headers: {
+                'User-Agent': uaObj.ua,
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Referer': requestUrl,
+              }
+            }).catch(() => {});
+
+            extraLogInfo = ` + Jetpack Pixel (Blog: ${blogId}${postId ? `, Post: ${postId}` : ''})`;
+          }
+
+          // 4. Dispatch WP-PostViews / Post Views Counter AJAX hit if applicable
+          if (postId) {
+            fetch(`https://${targetHost}/wp-admin/admin-ajax.php`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'User-Agent': uaObj.ua,
+                'Referer': requestUrl,
+                'X-Requested-With': 'XMLHttpRequest'
+              },
+              body: `action=postviews&postviews_id=${postId}`
+            }).catch(() => {});
+          }
+        } catch (wpErr) {
+          // Non-blocking WordPress tracking fallback
+        }
+      }
     } catch (err: any) {
       isSuccess = false;
       if (err.name === 'AbortError') {
@@ -815,7 +923,7 @@ app.get('/api/traffic/stream', async (req, res) => {
         statusCode,
         latencyMs: durationMs,
         message: isSuccess
-          ? `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} HTTP ${statusCode} in ${durationMs}ms | ${uaObj.name} | ${requestUrl}`
+          ? `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} HTTP ${statusCode}${extraLogInfo} in ${durationMs}ms | ${uaObj.name} | ${requestUrl}`
           : `[Worker ${String(workerId).padStart(2, '0')}] #${String(reqId).padStart(4, '0')} FAIL (${errorMsg || `HTTP ${statusCode}`}) in ${durationMs}ms | ${requestUrl}`,
       },
     });

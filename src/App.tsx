@@ -10,12 +10,13 @@ import { GoCodeViewer } from './components/GoCodeViewer';
 import { NormalTrafficGuide } from './components/NormalTrafficGuide';
 import { ArchitectureModal } from './components/ArchitectureModal';
 import { ViewCountTester } from './components/ViewCountTester';
+import { WordPressJetpackDiagnostic } from './components/WordPressJetpackDiagnostic';
 import { ClickHeadLogo } from './components/ClickHeadLogo';
-import { Terminal, Code2, Play, SlidersHorizontal, Sun, Layers, Eye } from 'lucide-react';
+import { Terminal, Code2, Play, SlidersHorizontal, Sun, Layers, Eye, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [config, setConfig] = useState<LoadTestConfig>({
-    targetUrl: 'https://httpbin.org/get',
+    targetUrl: 'https://bankingdigests.com/cyber-financial-fraud-what-to-do-immediately-after-falling-victim/',
     subPaths: ['/', '/about', '/pricing', '/features'],
     enableMultiPage: false,
     totalRequests: 100,
@@ -25,21 +26,23 @@ export default function App() {
     timeoutSeconds: 10,
     userAgentMode: 'realistic-rotation',
     followRedirects: true,
-    referer: 'https://www.google.com/',
+    referer: 'https://www.google.com/search?q=banking+fraud+guide',
     acceptEncoding: true,
     keepAlive: true,
     proxyUrl: '',
     enableProxyRotation: false,
+    enableWordPressTracking: true,
+    jetpackBlogId: '175376211',
     distributionMode: 'spread-1h',
     distributionMinutes: 60,
     useDiurnalCurve: true,
   });
 
-  const [activePresetId, setActivePresetId] = useState<string>('organic-drip');
+  const [activePresetId, setActivePresetId] = useState<string>('wordpress-jetpack');
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isArchitectureOpen, setIsArchitectureOpen] = useState<boolean>(false);
-  const [activeMode, setActiveMode] = useState<'simple' | 'simulator' | 'counter' | 'code' | 'advanced'>('simple');
+  const [activeMode, setActiveMode] = useState<'simple' | 'wordpress' | 'simulator' | 'counter' | 'code' | 'advanced'>('simple');
 
   const handleConfigChange = (updated: Partial<LoadTestConfig>) => {
     setConfig((prev) => ({ ...prev, ...updated }));
@@ -94,6 +97,19 @@ export default function App() {
             >
               <Sun className="w-4 h-4" />
               <span>Day Planner</span>
+            </button>
+
+            <button
+              id="nav-tab-wordpress"
+              onClick={() => setActiveMode('wordpress')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer uppercase tracking-wider ${
+                activeMode === 'wordpress'
+                  ? 'bg-[#B4F82C] text-black shadow-md shadow-[#B4F82C]/20'
+                  : 'text-[#9BB0A3] hover:text-white hover:bg-[#132A1D]'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-[#B4F82C]" />
+              <span>WordPress / Jetpack Stats (Fixed)</span>
             </button>
 
             <button
@@ -196,6 +212,18 @@ export default function App() {
                 onSimulationStateChange={(running) => setIsSimulating(running)}
               />
             </div>
+          </div>
+        )}
+
+        {/* MODE: WordPress & Jetpack Diagnostic & Fix */}
+        {activeMode === 'wordpress' && (
+          <div className="space-y-6">
+            <WordPressJetpackDiagnostic
+              config={config}
+              onChange={handleConfigChange}
+              onApplyWordPressPreset={() => handleApplyPreset('wordpress-jetpack')}
+              onStartSimulation={() => setActiveMode('simulator')}
+            />
           </div>
         )}
 

@@ -185,6 +185,14 @@ export const SimpleTrafficPlanner: React.FC<SimpleTrafficPlannerProps> = ({
             <button
               type="button"
               disabled={isSimulating}
+              onClick={() => onChange({ targetUrl: 'https://bankingdigests.com/cyber-financial-fraud-what-to-do-immediately-after-falling-victim/', enableWordPressTracking: true, jetpackBlogId: '175376211' })}
+              className="text-[11px] font-mono text-[#B4F82C] hover:underline cursor-pointer bg-[#0E1F16] px-2.5 py-1 rounded-lg border border-[#1E3E2B]"
+            >
+              bankingdigests.com
+            </button>
+            <button
+              type="button"
+              disabled={isSimulating}
               onClick={() => onChange({ targetUrl: 'https://httpbin.org/get' })}
               className="text-[11px] font-mono text-[#B4F82C] hover:underline cursor-pointer bg-[#0E1F16] px-2.5 py-1 rounded-lg border border-[#1E3E2B]"
             >
@@ -198,6 +206,37 @@ export const SimpleTrafficPlanner: React.FC<SimpleTrafficPlannerProps> = ({
             >
               cloudflare.com/trace
             </button>
+          </div>
+
+          {/* WordPress & Jetpack Tracking Mode Highlight Card */}
+          <div className="bg-[#07110C] border-2 border-[#1E3E2B] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#152E20] border border-[#27533B] flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-[#B4F82C]" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-2">
+                  <span>WordPress Jetpack Stats Pixel Dispatch</span>
+                  <span className="text-[10px] bg-[#152E20] text-[#B4F82C] px-2 py-0.5 rounded-md border border-[#27533B] font-mono font-bold">
+                    ACTIVE (Blog: {config.jetpackBlogId || '175376211'})
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#9BB0A3] mt-0.5">
+                  Automatically triggers <code className="text-[#B4F82C] font-mono">pixel.wp.com</code> tracking beacons so views appear in WordPress Jetpack stats.
+                </p>
+              </div>
+            </div>
+
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                disabled={isSimulating}
+                checked={config.enableWordPressTracking !== false}
+                onChange={(e) => onChange({ enableWordPressTracking: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-[#142D1F] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B4F82C] peer-checked:after:bg-black"></div>
+            </label>
           </div>
         </div>
 

@@ -49,6 +49,9 @@ export class TrafficSimulator {
       distributionMinutes: String(this.config.distributionMinutes || 0),
       useDiurnal: String(this.config.useDiurnalCurve || false),
       referer: this.config.referer || '',
+      enableWordPressTracking: String(this.config.enableWordPressTracking || false),
+      jetpackBlogId: this.config.jetpackBlogId || '',
+      wpPostId: this.config.wpPostId || '',
       sessionId: this.sessionId,
     });
 
@@ -192,6 +195,17 @@ export class TrafficSimulator {
             try {
               await fetch(requestUrl, { mode: 'no-cors', signal: controller.signal });
               clearTimeout(tid);
+
+              // If WordPress tracking is active, fire real Jetpack pixel beacon directly from the browser!
+              if (this.config.enableWordPressTracking || requestUrl.includes('bankingdigests') || requestUrl.includes('wp-content')) {
+                try {
+                  const urlObj = new URL(requestUrl);
+                  const blogId = this.config.jetpackBlogId || '175376211';
+                  const postId = this.config.wpPostId || '0';
+                  const pixelUrl = `https://pixel.wp.com/g.gif?v=wpcom-no-pv&j=1%3A13.8&blog=${blogId}&post=${postId}&host=${encodeURIComponent(urlObj.hostname)}&ref=${encodeURIComponent(referer || 'https://www.google.com/')}&rand=${Math.random()}&baba=${Math.random().toString(36).substring(2, 9)}`;
+                  fetch(pixelUrl, { mode: 'no-cors' }).catch(() => {});
+                } catch {}
+              }
             } catch {
               clearTimeout(tid);
             }

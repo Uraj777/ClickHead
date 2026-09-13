@@ -376,6 +376,56 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </p>
       </div>
 
+      {/* WordPress & Jetpack Tracking Beacon Controls */}
+      <div className="bg-[#07110C] border-2 border-[#1E3E2B] rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-[#B4F82C]" />
+            WordPress &amp; Jetpack Stats Beacon (Fixed)
+          </span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              disabled={isSimulating}
+              checked={config.enableWordPressTracking || false}
+              onChange={(e) => onChange({ enableWordPressTracking: e.target.checked })}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-5 bg-[#142D1F] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#B4F82C] peer-checked:after:bg-black"></div>
+          </label>
+        </div>
+        {config.enableWordPressTracking ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <div>
+              <label className="text-[10px] text-[#9BB0A3] uppercase font-bold block mb-1">Jetpack Blog ID</label>
+              <input
+                type="text"
+                disabled={isSimulating}
+                value={config.jetpackBlogId || '175376211'}
+                onChange={(e) => onChange({ jetpackBlogId: e.target.value })}
+                placeholder="175376211"
+                className="w-full px-3 py-1.5 rounded-xl bg-[#0C1A12] border border-[#1E3E2B] text-xs text-white font-mono focus:outline-none focus:border-[#B4F82C]"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[#9BB0A3] uppercase font-bold block mb-1">Post ID (Optional)</label>
+              <input
+                type="text"
+                disabled={isSimulating}
+                value={config.wpPostId || ''}
+                onChange={(e) => onChange({ wpPostId: e.target.value })}
+                placeholder="Auto-detected"
+                className="w-full px-3 py-1.5 rounded-xl bg-[#0C1A12] border border-[#1E3E2B] text-xs text-white font-mono focus:outline-none focus:border-[#B4F82C]"
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="text-[11px] text-[#9BB0A3]">
+            Enable to automatically dispatch real <code className="text-[#B4F82C]">pixel.wp.com</code> tracking beacons and WordPress AJAX view counters.
+          </p>
+        )}
+      </div>
+
       {/* Traffic Characteristics Badge */}
       <div className="bg-[#07110C] border-2 border-[#1E3E2B] rounded-2xl p-4 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
