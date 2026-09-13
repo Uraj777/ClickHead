@@ -3,7 +3,7 @@ import { REALISTIC_USER_AGENTS } from '../data/userAgents';
 
 export class TrafficSimulator {
   private config: LoadTestConfig;
-  private isRunning: boolean = false;
+  private isRunning = false;
   private eventSource: EventSource | null = null;
   private sessionId: string;
   private onMetric: (metric: RequestMetric, currentAggregated: AggregatedMetrics) => void;
@@ -27,14 +27,14 @@ export class TrafficSimulator {
   }
 
   public start() {
-    if (this.isRunning) return;
+    if (this.isRunning || !this.config.targetUrl.trim()) return;
     this.isRunning = true;
     this.clientWorkersActive = false;
 
     this.onLog({
       timestamp: new Date().toISOString().substring(11, 23),
       level: 'INFO',
-      message: `Initializing Engine: Connecting ${this.config.concurrency} concurrent workers to ${this.config.targetUrl}...`,
+      message: `Initializing ${this.config.concurrency} concurrent workers for ${this.config.targetUrl}...`,
     });
 
     const queryParams = new URLSearchParams({
@@ -67,7 +67,7 @@ export class TrafficSimulator {
         this.onLog({
           timestamp: new Date().toISOString().substring(11, 23),
           level: 'INFO',
-          message: `Backend engine active: ${this.config.totalRequests} requests queued with ${this.config.delayMs}ms pacing (+${this.config.jitterMs}ms jitter).`,
+          message: `${this.config.totalRequests} requests queued with ${this.config.delayMs}ms pacing (+${this.config.jitterMs}ms jitter).`,
         });
       });
 
@@ -75,14 +75,10 @@ export class TrafficSimulator {
         hasReceivedData = true;
         try {
           const data = JSON.parse(e.data);
-          if (data.metric && data.aggregated) {
-            this.onMetric(data.metric, data.aggregated);
-          }
-          if (data.log) {
-            this.onLog(data.log);
-          }
+          if (data.metric && data.aggregated) this.onMetric(data.metric, data.aggregated);
+          if (data.log) this.onLog(data.log);
         } catch (err) {
-          console.error('Failed to parse SSE metric payload', err);
+          console.error('Failed to parse telemetry payload', err);
         }
       });
 
@@ -91,42 +87,38 @@ export class TrafficSimulator {
         try {
           const data = JSON.parse(e.data);
           this.isRunning = false;
-          if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
-          }
+          this.eventSource?.close();
+          this.eventSource = null;
           this.onLog({
             timestamp: new Date().toISOString().substring(11, 23),
             level: 'SUCCESS',
-            message: `Finished: ${data.message || 'All requests processed successfully.'}`,
+            message: `Finished: ${data.message || 'All requests processed.'}`,
           });
-          if (data.finalMetrics) {
-            this.onComplete(data.finalMetrics);
-          }
+          if (data.finalMetrics) this.onComplete(data.finalMetrics);
         } catch (err) {
-          console.error('Failed to parse complete payload', err);
+          console.error('Failed to parse completion payload', err);
         }
       });
 
       es.onerror = () => {
         if (!hasReceivedData && this.isRunning && !this.clientWorkersActive) {
-          // SSE endpoint unavailable (e.g. running on static GitHub Pages hosting)
           this.onLog({
             timestamp: new Date().toISOString().substring(11, 23),
             level: 'WARN',
-            message: `Static environment detected (GitHub Pages). Activating client-side browser traffic engine...`,
+            message: 'Server telemetry is unavailable. Using the browser transport test instead.',
           });
-          if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
-          }
+          es.close();
+          this.eventSource = null;
           this.runClientSideSimulation();
         } else if (this.isRunning) {
           this.isRunning = false;
-          if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
-          }
+          es.close();
+          this.eventSource = null;
+          this.onLog({
+            timestamp: new Date().toISOString().substring(11, 23),
+            level: 'ERROR',
+            message: 'Telemetry connection lost before the test completed.',
+          });
         }
       };
     } catch {
@@ -137,12 +129,12 @@ export class TrafficSimulator {
   private async runClientSideSimulation() {
     this.clientWorkersActive = true;
     const { totalRequests, concurrency, delayMs, jitterMs, targetUrl, subPaths, enableMultiPage, referer } = this.config;
-
     let completed = 0;
     let successful = 0;
     let totalBytes = 0;
     const latencies: number[] = [];
     const startTime = Date.now();
+    let nextRequestId = 1;
 
     const getAggregated = (): AggregatedMetrics => {
       const elapsedSeconds = Math.max(0.001, (Date.now() - startTime) / 1000);
@@ -160,64 +152,57 @@ export class TrafficSimulator {
         elapsedSeconds,
         currentRps: completed / elapsedSeconds,
         avgRps: completed / elapsedSeconds,
-        avgDurationMs: count > 0 ? Math.round(sorted.reduce((a, b) => a + b, 0) / count) : 0,
-        minDurationMs: count > 0 ? sorted[0] : 0,
-        maxDurationMs: count > 0 ? sorted[count - 1] : 0,
-        p50Ms: count > 0 ? sorted[Math.floor(count * 0.5)] : 0,
-        p90Ms: count > 0 ? sorted[Math.floor(count * 0.9)] : 0,
-        p95Ms: count > 0 ? sorted[Math.floor(count * 0.95)] : 0,
-        p99Ms: count > 0 ? sorted[Math.floor(count * 0.99)] : 0,
+        avgDurationMs: count ? Math.round(sorted.reduce((a, b) => a + b, 0) / count) : 0,
+        minDurationMs: count ? sorted[0] : 0,
+        maxDurationMs: count ? sorted[count - 1] : 0,
+        p50Ms: count ? sorted[Math.min(count - 1, Math.floor(count * 0.5))] : 0,
+        p90Ms: count ? sorted[Math.min(count - 1, Math.floor(count * 0.9))] : 0,
+        p95Ms: count ? sorted[Math.min(count - 1, Math.floor(count * 0.95))] : 0,
+        p99Ms: count ? sorted[Math.min(count - 1, Math.floor(count * 0.99))] : 0,
       };
     };
-
-    let nextRequestId = 1;
 
     const runWorker = async (workerId: number) => {
       while (this.isRunning && nextRequestId <= totalRequests) {
         const reqId = nextRequestId++;
         const ua = REALISTIC_USER_AGENTS[Math.floor(Math.random() * REALISTIC_USER_AGENTS.length)];
         const reqStart = performance.now();
-
         let requestUrl = targetUrl;
-        if (enableMultiPage && subPaths && subPaths.length > 1) {
+
+        if (enableMultiPage && subPaths?.length) {
           const chosen = subPaths[Math.floor(Math.random() * subPaths.length)];
           requestUrl = chosen.startsWith('http') ? chosen : `${targetUrl.replace(/\/+$/, '')}${chosen}`;
         }
 
-        let isSuccess = true;
-        let statusCode = 200;
-        let bytes = Math.floor(Math.random() * 4000) + 1200;
+        let success = false;
+        let statusCode = 0;
+        let error: string | undefined;
+        let bytesReceived = 0;
 
         try {
-          if (requestUrl.startsWith('http')) {
-            const controller = new AbortController();
-            const tid = setTimeout(() => controller.abort(), 8000);
-            try {
-              await fetch(requestUrl, { mode: 'no-cors', signal: controller.signal });
-              clearTimeout(tid);
-
-              // If WordPress tracking is active, fire real Jetpack pixel beacon directly from the browser!
-              if (this.config.enableWordPressTracking || requestUrl.includes('bankingdigests') || requestUrl.includes('wp-content')) {
-                try {
-                  const urlObj = new URL(requestUrl);
-                  const blogId = this.config.jetpackBlogId || '175376211';
-                  const postId = this.config.wpPostId || '0';
-                  const pixelUrl = `https://pixel.wp.com/g.gif?v=wpcom-no-pv&j=1%3A13.8&blog=${blogId}&post=${postId}&host=${encodeURIComponent(urlObj.hostname)}&ref=${encodeURIComponent(referer || 'https://www.google.com/')}&rand=${Math.random()}&baba=${Math.random().toString(36).substring(2, 9)}`;
-                  fetch(pixelUrl, { mode: 'no-cors' }).catch(() => {});
-                } catch {}
-              }
-            } catch {
-              clearTimeout(tid);
+          if (!requestUrl.startsWith('http')) throw new Error('Target must use HTTP or HTTPS.');
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), Math.max(1000, this.config.timeoutSeconds * 1000));
+          try {
+            const response = await fetch(requestUrl, { mode: 'no-cors', signal: controller.signal });
+            success = true;
+            // no-cors responses are opaque; the browser intentionally does not expose status/body size.
+            if (response.type !== 'opaque') {
+              statusCode = response.status;
+              const length = response.headers.get('content-length');
+              bytesReceived = length ? Number(length) || 0 : 0;
             }
+          } finally {
+            clearTimeout(timeout);
           }
-        } catch {
-          // fetch error
+        } catch (err) {
+          error = err instanceof Error ? err.message : 'Network request failed';
         }
 
-        const duration = Math.max(1, Math.round(performance.now() - reqStart + Math.random() * 40));
+        const duration = Math.max(1, Math.round(performance.now() - reqStart));
         completed++;
-        successful++;
-        totalBytes += bytes;
+        if (success) successful++;
+        totalBytes += bytesReceived;
         latencies.push(duration);
 
         const metric: RequestMetric = {
@@ -227,29 +212,26 @@ export class TrafficSimulator {
           url: requestUrl,
           statusCode,
           durationMs: duration,
-          bytesReceived: bytes,
+          bytesReceived,
           userAgent: ua.name,
-          referer: referer || 'Direct Visit',
-          success: isSuccess,
+          referer: referer || 'Direct',
+          success,
+          error,
         };
 
-        const aggregated = getAggregated();
-        this.onMetric(metric, aggregated);
-
+        this.onMetric(metric, getAggregated());
         this.onLog({
           timestamp: new Date().toISOString().substring(11, 23),
-          level: 'INFO',
-          message: `Worker #${workerId} [Req #${reqId}/${totalRequests}] -> ${requestUrl} [HTTP 200 OK, ${duration}ms] (${ua.name})`,
+          level: success ? 'INFO' : 'ERROR',
+          message: `Worker #${workerId} [Req #${reqId}/${totalRequests}] → ${requestUrl} [${success ? 'transport OK' : error || 'failed'}${statusCode ? ` / HTTP ${statusCode}` : ''}, ${duration}ms]`,
         });
 
-        // Human Pacing
         const actualJitter = jitterMs > 0 ? Math.floor(Math.random() * jitterMs) : 0;
-        const sleepDuration = delayMs + actualJitter;
-        await new Promise((r) => setTimeout(r, sleepDuration));
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, delayMs + actualJitter)));
       }
     };
 
-    const workers = Array.from({ length: Math.min(concurrency, totalRequests) }, (_, i) => runWorker(i + 1));
+    const workers = Array.from({ length: Math.min(Math.max(1, concurrency), totalRequests) }, (_, i) => runWorker(i + 1));
     await Promise.all(workers);
 
     if (this.isRunning) {
@@ -258,7 +240,7 @@ export class TrafficSimulator {
       this.onLog({
         timestamp: new Date().toISOString().substring(11, 23),
         level: 'SUCCESS',
-        message: `Client Simulation complete: Dispatched ${completed} requests. Avg RPS: ${finalMetrics.avgRps.toFixed(1)}`,
+        message: `Browser transport test complete: ${completed} requests dispatched. Avg RPS: ${finalMetrics.avgRps.toFixed(1)}`,
       });
       this.onComplete(finalMetrics);
     }
@@ -267,23 +249,17 @@ export class TrafficSimulator {
   public stop() {
     if (!this.isRunning) return;
     this.isRunning = false;
-
-    // Send abort to backend
     fetch('/api/traffic/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: this.sessionId }),
     }).catch(() => {});
-
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-
+    this.eventSource?.close();
+    this.eventSource = null;
     this.onLog({
       timestamp: new Date().toISOString().substring(11, 23),
       level: 'WARN',
-      message: `Stop signal sent (SIGINT). Simulation terminated.`,
+      message: 'Stop signal sent. Test terminated.',
     });
   }
 }
